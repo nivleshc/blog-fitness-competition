@@ -1,0 +1,56 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: SAM template - create a fitness competition using AWS Lambda and fitbit ecosystem
+Parameters:
+  SlackWebhookURL:
+    Type: String
+    Description: Slack webhook url for sending notifications
+  ArtefactsS3Bucket:
+    Type: String
+    Description: S3 Bucket for artefacts
+  ArtefactsS3KeyPrefix:
+    Type: String
+    Description: Prefix for the objects in the ArtefactsS3Bucket
+Resources:
+  FitnessCompetitionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: This function gets the fitbit steps for each competitor, calculates their scores and rank and sends their standing via slack.
+      Handler: src/fitness_competition.lambda_handler
+      Runtime: python3.7
+      MemorySize: 128
+      Timeout: 300
+      Events:
+        CWEventsSchedule:
+          Type: Schedule
+          Properties:
+            Schedule: "cron(10 14 * * ? *)"
+            Name: RunFitnessCompetition
+            Description: Run Fitness Competition Lambda to calculate each players points and rank
+            Enabled: True
+      Policies:
+      - AWSLambdaBasicExecutionRole
+      - S3ReadPolicy:
+          BucketName: !Ref ArtefactsS3Bucket
+      - S3WritePolicy:
+          BucketName: !Ref ArtefactsS3Bucket
+      - Statement:
+        - Action:
+          - ssm:GetParameter
+          - ssm:PutParameter
+          Effect: Allow
+          Resource: 
+            Fn::Join:
+            - ''
+            - - 'arn:aws:ssm:'
+              - !Ref AWS::Region
+              - ':'
+              - !Ref AWS::AccountId
+              - ':'
+              - 'parameter/fitbit_*'
+      Environment:
+        Variables:
+          SLACK_WEBHOOK_URL: !Ref SlackWebhookURL
+          ARTEFACTS_S3_BUCKET: !Ref ArtefactsS3Bucket
+          ARTEFACTS_S3_KEY_PREFIX: !Ref ArtefactsS3KeyPrefix
+      
